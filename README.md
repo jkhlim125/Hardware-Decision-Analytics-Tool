@@ -37,9 +37,10 @@ ____
 ** Project Motivation
 
 Experiments are often hard to debug due to variability across runs.
-This dashboard helps identify performance issues and improves reproducibility.
+This dashboard helps identify performance issues and improve reproducibility.
 
 ⸻
+
 ** Key Insight
 
 	•	Automatically flags abnormal runs based on statistical deviation
