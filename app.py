@@ -54,6 +54,20 @@ def apply_plot_style(fig, title, x_title, y_title, height=600):
     fig.update_yaxes(title_font=dict(size=16), tickfont=dict(size=12))
     return fig
 
+def get_top_config_for_lambda(df, lambda_value):
+    d = df[~df["is_baseline"]].copy()
+
+    if d.empty:
+        return None
+
+    d["temp_tradeoff_score"] = d["pin_reduction"] - lambda_value * d["acc_drop_positive"]
+    d = d.dropna(subset=["temp_tradeoff_score"])
+
+    if d.empty:
+        return None
+
+    return d.sort_values("temp_tradeoff_score", ascending=False).iloc[0]
+    
 
 st.set_page_config(page_title="Hardware-Aware Experiment Dashboard", layout="wide")
 
@@ -63,6 +77,16 @@ st.write(
     "between hardware efficiency (e.g., pin/slice reduction) and model accuracy. "
     "It helps identify optimal configurations under different hardware constraints."
 )
+
+st.caption(
+    "Recommendation rules: Best trade-off = highest trade-off score, "
+    "Best accuracy retention = highest maximum accuracy, "
+    "Highest hardware gain = highest pin reduction."
+)
+
+
+
+st.caption("Trade-off score = pin reduction - λ × accuracy drop")
 
 st.sidebar.header("Settings")
 
@@ -122,12 +146,17 @@ c1, c2, c3 = st.columns(3)
 with c1:
     if not best_tradeoff.empty:
         row = best_tradeoff.iloc[0]
+        avg_pin = non_baseline["pin_reduction"].mean()
+        avg_drop = non_baseline["acc_drop_positive"].mean()
+        
         st.info(
             "Best trade-off\n\n"
             f"{format_config_text(row)}\n\n"
-            f"• Pin Reduction: {row['pin_reduction']:.2f}%\n"
-            f"• Accuracy Drop: {row['acc_drop_positive']:.2f}%\n\n"
-            "👉 Strong balance between hardware gain and accuracy preservation"
+            f"• Pin Reduction: {row['pin_reduction']:.2f}% "
+            f"(+{row['pin_reduction'] - avg_pin:.2f} vs avg)\n"
+            f"• Accuracy Drop: {row['acc_drop_positive']:.2f}% "
+            f"({row['acc_drop_positive'] - avg_drop:.2f} vs avg)\n\n"
+            "👉 Selected as optimal balance under current lambda"
         )
 
 with c2:
@@ -479,6 +508,14 @@ with tab4:
 with tab5:
     st.subheader("Top Configurations by Trade-off Score")
     st.caption(
+        "Recommendation rules: Best trade-off = highest trade-off score, "
+        "Best accuracy retention = highest maximum accuracy, "
+        "Highest hardware gain = highest pin reduction."
+    )
+
+    st.caption("Trade-off score = pin reduction - λ × accuracy drop")
+    
+    st.caption(
         "Configurations are ranked based on a trade-off score balancing hardware efficiency "
         "(pin reduction) and accuracy loss using the selected lambda."
     )
@@ -519,6 +556,52 @@ with tab5:
         )
     
         st.plotly_chart(fig3, use_container_width=True)
+        
+        st.markdown("### Top Configuration Across Different Lambda Values")
+    
+        lambda_candidates = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
+        lambda_rows = []
+    
+        for lam in lambda_candidates:
+            top_row = get_top_config_for_lambda(df, lam)
+    
+            if top_row is not None:
+                lambda_rows.append(
+                    {
+                        "lambda": lam,
+                        "pack_ratio": round(float(top_row["pack_ratio"]), 2),
+                        "global_sparsity": round(float(top_row["global_sparsity"]), 2),
+                        "max_acc": round(float(top_row["max_acc"]), 2),
+                        "pin_reduction": round(float(top_row["pin_reduction"]), 2),
+                        "acc_drop_positive": round(float(top_row["acc_drop_positive"]), 2),
+                        "tradeoff_score": round(
+                            float(top_row["pin_reduction"] - lam * top_row["acc_drop_positive"]), 2
+                        ),
+                    }
+                )
+    
+        lambda_df = pd.DataFrame(lambda_rows)
+    
+        if not lambda_df.empty:
+            st.dataframe(lambda_df, use_container_width=True)
+    
+            fig_lambda = px.line(
+                lambda_df,
+                x="lambda",
+                y="tradeoff_score",
+                markers=True,
+                hover_data=["pack_ratio", "global_sparsity", "max_acc", "pin_reduction", "acc_drop_positive"],
+            )
+    
+            fig_lambda = apply_plot_style(
+                fig_lambda,
+                title="Best Trade-off Score Under Different Lambda Values",
+                x_title="Lambda",
+                y_title="Top Trade-off Score",
+                height=450,
+            )
+    
+            st.plotly_chart(fig_lambda, use_container_width=True)
 
 with tab6:
     st.subheader("Raw Data")
