@@ -1,9 +1,18 @@
-# Hardware-Aware Experiment Analysis Dashboard
+# Hardware-Aware Neural Network Trade-off Analysis Dashboard
 
-This project is an interactive analysis tool for comparing experiment configurations in LUT-based neural networks from both accuracy and hardware-efficiency perspectives.
+## Approach
 
-It was developed to support structured comparison of different packing and sparsity configurations during FPGA-oriented neural network experiments.
+This project provides an interactive analysis tool to explore the trade-off between hardware efficiency and model performance.
 
+A custom trade-off score is defined as:
+
+Trade-off Score = Pin Reduction − λ × Accuracy Drop
+
+- Pin Reduction represents hardware efficiency gain
+- Accuracy Drop represents performance degradation
+- λ (lambda) controls the relative importance of accuracy vs hardware efficiency
+
+By adjusting λ, users can simulate different deployment priorities and observe how the optimal configuration changes.
 https://hardware-aware-experiment-dashboard-x95bufhzfrgdusxyf593hv.streamlit.app/
 
 ## Note
@@ -12,18 +21,25 @@ The current version extends this into a hardware-aware analysis tool with struct
 
 ## Main Features
 
-- Parse experiment results from JSON logs
-- Compare maximum accuracy and accuracy drop against baseline
-- Analyze hardware-related metrics such as pin reduction, slice reduction, and packing efficiency
-- Compute a custom trade-off score for balancing hardware gain and accuracy penalty
-- Visualize Pareto frontiers for configuration comparison
-- Explore epoch-level curves for selected configurations
-- Export summary results as CSV
+## Key Features
 
-## Motivation
+- Trade-off Visualization  
+  Visualizes relationships between accuracy, pin reduction, and slice reduction
 
-In LUT-based neural network experiments, comparing configurations only by final accuracy is often not enough.
-This tool was built to make hardware-aware trade-off analysis easier and more systematic.
+- Pareto Frontier Analysis  
+  Identifies optimal configurations under multi-objective constraints
+
+- Recommendation System  
+  Automatically suggests configurations based on:
+  - Best trade-off score
+  - Best accuracy retention
+  - Highest hardware efficiency
+
+- Lambda Sensitivity Analysis  
+  Shows how optimal configurations shift as trade-off preference (λ) changes
+
+- Experiment Dashboard  
+  Interactive exploration of experiment logs (accuracy curves, metrics, comparisons)
 
 ## Example Metrics
 
