@@ -4,6 +4,8 @@ This project is an interactive analysis tool for comparing experiment configurat
 
 It was developed to support structured comparison of different packing and sparsity configurations during FPGA-oriented neural network experiments.
 
+https://hardware-aware-experiment-dashboard-x95bufhzfrgdusxyf593hv.streamlit.app/
+
 ## Note
 An earlier version of this project (`legacy_log_dashboard.py`) was initially developed for simple log visualization.  
 The current version extends this into a hardware-aware analysis tool with structured trade-off evaluation.
