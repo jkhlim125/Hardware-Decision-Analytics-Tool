@@ -39,3 +39,8 @@ This tool was built to make hardware-aware trade-off analysis easier and more sy
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+
+## Note
+
+An earlier version of this project (`legacy_log_dashboard.py`) was initially developed for simple log visualization.  
+The current version extends this into a hardware-aware analysis tool with structured trade-off evaluation.
