@@ -159,6 +159,10 @@ def parse_rtl_latency_csv(path_or_bytes: Union[str, Path, bytes]) -> Tuple[pd.Da
 
     lut_mean = float(df["latency_lut"].mean(skipna=True)) if run_count else np.nan
     mac_mean = float(df["latency_mac"].mean(skipna=True)) if run_count else np.nan
+    if pd.isna(lut_mean):
+        warnings.append("RTL latency CSV did not contain usable `latency_lut` values.")
+    if pd.isna(mac_mean):
+        warnings.append("RTL latency CSV did not contain usable `latency_mac` values.")
 
     rows = [
         {
@@ -174,7 +178,7 @@ def parse_rtl_latency_csv(path_or_bytes: Union[str, Path, bytes]) -> Tuple[pd.Da
             "slice_reduction": np.nan,
             "packing_efficiency": np.nan,
             "lut_usage": np.nan,
-            "notes": "Derived from event-based RTL testbench latency log (LUT path).",
+            "notes": "Derived from event-based RTL testbench latency log (LUT path, averaged across runs).",
             "source": "rtl_simulation",
             "run_count": run_count,
             "source_file": source_label,
@@ -192,7 +196,7 @@ def parse_rtl_latency_csv(path_or_bytes: Union[str, Path, bytes]) -> Tuple[pd.Da
             "slice_reduction": np.nan,
             "packing_efficiency": np.nan,
             "lut_usage": np.nan,
-            "notes": "Derived from event-based RTL testbench latency log (MAC path).",
+            "notes": "Derived from event-based RTL testbench latency log (MAC path, averaged across runs).",
             "source": "rtl_simulation",
             "run_count": run_count,
             "source_file": source_label,
@@ -441,4 +445,3 @@ def load_and_normalize_data(
             df[c] = df[c].fillna("").astype(str)
 
     return df.reset_index(drop=True), detected, warnings
-
