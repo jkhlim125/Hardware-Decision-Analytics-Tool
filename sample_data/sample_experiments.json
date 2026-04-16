@@ -1,0 +1,40 @@
+{
+  "experiments": [
+    {
+      "source_log": "baseline_run.log",
+      "configuration": { "pack_ratio": 0.0, "global_sparsity": 0.0 },
+      "max_test_accuracy": { "max_test_accuracy_percent": 92.1 },
+      "final_summary_physics_aware": {
+        "pin_reduction_rate_percent": 0.0,
+        "slice_reduction_percent": 0.0,
+        "successful_packs_pairs": 780,
+        "failed_packs_pairs": 220
+      }
+    },
+    {
+      "source_log": "candidate_prune_pack_1.log",
+      "configuration": { "pack_ratio": 0.35, "global_sparsity": 0.50 },
+      "max_test_accuracy": { "max_test_accuracy_percent": 91.0 },
+      "final_summary_physics_aware": {
+        "pin_reduction_rate_percent": 18.8,
+        "slice_reduction_percent": 30.6,
+        "successful_packs_pairs": 880,
+        "failed_packs_pairs": 120
+      }
+    },
+    {
+      "source_log": "candidate_prune_1.log",
+      "configuration": { "pack_ratio": 0.20, "global_sparsity": 0.60 },
+      "max_test_accuracy": { "max_test_accuracy_percent": 90.2 },
+      "final_summary_physics_aware": {
+        "pin_reduction_rate_percent": 15.6,
+        "slice_reduction_percent": 26.7,
+        "successful_packs_pairs": 840,
+        "failed_packs_pairs": 160
+      }
+    }
+  ],
+  "configurations_by_experiment": [],
+  "max_test_accuracy_by_experiment": [],
+  "summaries_by_experiment": []
+}
