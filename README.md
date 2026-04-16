@@ -1,125 +1,155 @@
 ## Overview
 
-This project is a **hardware-aware design trade-off analysis and decision-support tool** built in Streamlit.
-It helps engineers choose among design candidates (experiment runs, system-level configurations, and RTL-derived variants)
-under explicit constraints and priorities.
+This project is a Streamlit-based **hardware design decision tool** for comparing candidate configurations under explicit engineering constraints.
 
-The emphasis is on **engineering logic**:
-- Filter by **hard feasibility constraints** first (accuracy/latency/resource budgets)
-- Identify **Pareto-optimal** candidates (multi-objective)
-- Recommend designs under clear, explainable rules
-- Integrate **RTL simulation outputs** as comparable design candidates (even when other metrics are missing)
+The app is intentionally **constraint-first**:
 
-## Problem statement
+1. Load and normalize candidate data
+2. Apply hard constraints to split **feasible** and **rejected** candidates
+3. Compute a Pareto frontier on the feasible set
+4. Recommend a configuration under a chosen decision mode
+5. Run weight-based sensitivity analysis on feasible candidates only
 
-Hardware deployment decisions are rarely “maximize one metric”.
-Real constraints (latency budget, pin/slice budgets, minimum accuracy) define what is feasible, and only then do
-engineering priorities determine which feasible point is best.
+The goal is not to behave like a generic dashboard. It is meant to support engineering decisions with explicit filtering, traceable rejection reasons, and graceful handling of incomplete data.
 
-## Why constraint-aware filtering matters
+## Supported inputs
 
-A single weighted score can hide infeasible designs.
-This tool separates the workflow:
-- **Feasibility**: “Can we ship this design under the current constraints?”
-- **Preference**: “Among feasible candidates, what should we choose and why?”
+### `sample_tradeoff.csv`
 
-## Key features
+Structured trade-off table with metrics such as:
 
-- **Unified input model**: JSON experiment logs, generic CSV trade-off logs, and RTL latency comparison CSVs
-- **Hard constraint filtering**: returns feasible + rejected sets with explicit rejection reasons
-- **Pareto frontier**: generic Pareto-optimal marking for selectable objectives/directions
-- **Recommendation engine** (feasible set only):
-  - Best accuracy
-  - Best efficiency
-  - Best latency-aware
-  - Best balanced (simple normalized composite)
-- **Sensitivity / weight analysis**: adjust preference weights after constraints and see how the top design changes
-- **Robustness**: missing columns/NaNs/malformed uploads degrade gracefully without crashing the app
+- `accuracy`
+- `latency_cycles`
+- `pins`
+- `slices`
+- `pin_reduction`
+- `slice_reduction`
 
-## Input formats
+### `sample_experiments.json`
 
-### 1) JSON experiment logs
+Experiment-log style input. The parser maps experiment summaries into the app's canonical candidate schema.
 
-The parser supports the project’s existing JSON structure and maps it into a canonical design-candidate table.
-If a baseline is detected, `accuracy_drop` is computed vs baseline accuracy.
+### `sample_rtl_results.csv`
 
-Sample: `sample_data/sample_experiments.json`
+RTL latency comparison input with columns:
 
-### 2) Generic CSV trade-off logs
-
-Any CSV with some subset of fields like `accuracy`, `latency_cycles`, `pins`, `slices`, `pin_reduction`, etc.
-Columns are mapped conservatively into the canonical schema.
-
-Sample: `sample_data/sample_tradeoff.csv`
-
-### 3) RTL latency comparison CSV
-
-Expected columns:
 - `run_id`
 - `latency_lut`
 - `latency_mac`
 
-The parser converts this into two candidates:
-- `config_id=rtl_lut`, `design_type=LUT`
-- `config_id=rtl_mac`, `design_type=MAC`
+The parser converts this file into two candidates:
 
-Each candidate contains average `latency_cycles`, a `run_count`, and `source=rtl_simulation`.
-Other metrics remain `NaN` (and the tool still supports latency-oriented comparisons).
+- `design_type = LUT`
+- `design_type = MAC`
 
-Sample: `sample_data/sample_rtl_results.csv`
+Both are tagged with `source = rtl_simulation`. The app keeps missing metrics such as `accuracy`, `pins`, and `slices` as `NaN` and skips unsupported comparisons automatically.
 
-## Decision flow (what the UI does)
+## Key behavior
 
-1. **Load & normalize** candidates into a canonical dataframe (`parsers.load_and_normalize_data`)
-2. **Apply hard constraints** to produce:
-   - feasible candidates
-   - rejected candidates + rejection reasons
-3. **Compute Pareto frontier** over selected objectives (`analysis_engine.compute_pareto_frontier`)
-4. **Generate recommendations** from the feasible set (`recommendation.py`)
-5. **Sensitivity analysis**: adjust weights and sweep a parameter to observe recommendation changes
+### Hard constraints
 
-## Pareto frontier (definition)
+The default UI starts with these active constraints:
 
-A feasible candidate is **Pareto-optimal** if **no other feasible candidate** is:
-- at least as good in all selected objectives, and
-- strictly better in at least one objective,
-given the selected maximize/minimize directions.
+- `min_accuracy = 90`
+- `max_latency_cycles = 1500`
 
-## Recommendation logic (high level)
+Additional resource constraints can be enabled as needed. The user can also choose how missing metrics are treated:
 
-All recommendation modes operate on the **feasible set only**:
-- **Best accuracy**: highest `accuracy`
-- **Best efficiency**: strongest hardware efficiency proxy using available reduction/efficiency metrics
-- **Best latency-aware**: lowest `latency_cycles` (tie-break using accuracy/resources when available)
-- **Best balanced**: min-max normalized weighted score using available metrics only
+- treat missing metrics as infeasible
+- ignore missing metrics for active constraints
 
-## RTL integration
+Constraint evaluation returns:
 
-RTL-derived CSV outputs are treated as first-class candidates via `parsers.parse_rtl_latency_csv`.
-This supports a workflow where detailed simulation results inform system-level design selection,
-even when not all metrics are available in the RTL output yet.
+- `feasible_df`
+- `rejected_df`
 
-## How to run
+Rejected candidates include:
+
+- `rejection_reasons`
+- `rejection_reason_str`
+
+### Pareto frontier
+
+`analysis_engine.compute_pareto_frontier()` now:
+
+- returns all rows
+- always adds `is_pareto`
+- never raises for missing objectives or partial data
+
+A candidate is marked Pareto-optimal if no other candidate dominates it across the selected objectives and directions.
+
+### Recommendation modes
+
+Recommendations run on the **feasible set only**:
+
+- Best Accuracy
+- Best Latency
+- Best Efficiency
+- Balanced
+
+Each mode returns:
+
+- the selected candidate row
+- a short reason string
+
+### Weighted scoring
+
+Balanced scoring uses min-max normalization and combines available terms only:
+
+`score = w_acc * acc_norm - w_lat * lat_norm + w_eff * eff_norm`
+
+Missing terms are ignored safely so partial candidate data does not crash the tool.
+
+### Sensitivity analysis
+
+The app can sweep one weight at a time and show:
+
+- top score across the sweep
+- top configuration selected at each sweep value
+- whether the selected configuration changes
+
+## UI flow
+
+The app is organized as:
+
+- `A. Data Input`
+- `B. Constraints`
+- `C. Feasible Candidates`
+- `D. Pareto Frontier`
+- `E. Recommended Configuration`
+- `F. Sensitivity`
+
+Each section is designed to degrade gracefully:
+
+- empty dataframes show messages instead of crashing
+- missing columns skip unsupported tables and plots
+- no feasible candidates skips Pareto and recommendation safely
+- plot failures are caught and shown as warnings
+
+## Project structure
+
+```text
+stream/
+├── app.py
+├── analysis_engine.py
+├── parsers.py
+├── recommendation.py
+├── sample_data/
+│   ├── sample_tradeoff.csv
+│   ├── sample_experiments.json
+│   └── sample_rtl_results.csv
+├── README.md
+└── requirements.txt
+```
+
+## Run locally
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Project structure
+## Notes
 
-```text
-project_root/
-├── app.py                     # Streamlit UI only
-├── analysis_engine.py         # constraints, Pareto, scoring, sensitivity helpers
-├── parsers.py                 # JSON/CSV loaders + schema normalization (incl. RTL CSV)
-├── recommendation.py          # recommendation modes (feasible-set only)
-├── sample_data/
-│   ├── sample_experiments.json
-│   ├── sample_tradeoff.csv
-│   └── sample_rtl_results.csv
-├── results/                   # optional outputs
-├── README.md
-└── requirements.txt
-```
-
+- The app is structured to avoid Python tracebacks in normal user interaction by guarding empty, partial, and unsupported cases.
+- RTL-derived candidates are intentionally allowed to remain partial so latency-only evidence can still participate in the workflow where appropriate.
