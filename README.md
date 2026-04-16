@@ -1,85 +1,125 @@
-# Hardware-Aware Neural Network Trade-off Analysis Dashboard
+## Overview
 
-Streamlit live demo:
-https://hardware-aware-experiment-dashboard-x95bufhzfrgdusxyf593hv.streamlit.app/
+This project is a **hardware-aware design trade-off analysis and decision-support tool** built in Streamlit.
+It helps engineers choose among design candidates (experiment runs, system-level configurations, and RTL-derived variants)
+under explicit constraints and priorities.
 
-## Problem
+The emphasis is on **engineering logic**:
+- Filter by **hard feasibility constraints** first (accuracy/latency/resource budgets)
+- Identify **Pareto-optimal** candidates (multi-objective)
+- Recommend designs under clear, explainable rules
+- Integrate **RTL simulation outputs** as comparable design candidates (even when other metrics are missing)
 
-Neural network deployment on hardware (e.g., FPGA, edge devices) requires balancing two conflicting objectives:
+## Problem statement
 
-- Maximizing model accuracy
-- Minimizing hardware resource usage (e.g., pin count, slice utilization)
+Hardware deployment decisions are rarely “maximize one metric”.
+Real constraints (latency budget, pin/slice budgets, minimum accuracy) define what is feasible, and only then do
+engineering priorities determine which feasible point is best.
 
-Techniques such as pruning and quantization improve hardware efficiency but degrade accuracy.
+## Why constraint-aware filtering matters
 
-The key challenge is that there is no single optimal configuration — the best choice depends on deployment priorities.
+A single weighted score can hide infeasible designs.
+This tool separates the workflow:
+- **Feasibility**: “Can we ship this design under the current constraints?”
+- **Preference**: “Among feasible candidates, what should we choose and why?”
 
-## Motivation
+## Key features
 
-In practice, selecting a configuration is not just about maximizing a single metric.
+- **Unified input model**: JSON experiment logs, generic CSV trade-off logs, and RTL latency comparison CSVs
+- **Hard constraint filtering**: returns feasible + rejected sets with explicit rejection reasons
+- **Pareto frontier**: generic Pareto-optimal marking for selectable objectives/directions
+- **Recommendation engine** (feasible set only):
+  - Best accuracy
+  - Best efficiency
+  - Best latency-aware
+  - Best balanced (simple normalized composite)
+- **Sensitivity / weight analysis**: adjust preference weights after constraints and see how the top design changes
+- **Robustness**: missing columns/NaNs/malformed uploads degrade gracefully without crashing the app
 
-Instead, engineers must make trade-offs based on system constraints (e.g., latency, hardware budget, accuracy requirements).
+## Input formats
 
-This project was built to explicitly model and analyze these trade-offs, enabling more informed decision-making.
+### 1) JSON experiment logs
 
+The parser supports the project’s existing JSON structure and maps it into a canonical design-candidate table.
+If a baseline is detected, `accuracy_drop` is computed vs baseline accuracy.
 
-## Approach
+Sample: `sample_data/sample_experiments.json`
 
-This project provides an interactive analysis tool to explore the trade-off between hardware efficiency and model performance.
+### 2) Generic CSV trade-off logs
 
-A custom trade-off score is defined as:
+Any CSV with some subset of fields like `accuracy`, `latency_cycles`, `pins`, `slices`, `pin_reduction`, etc.
+Columns are mapped conservatively into the canonical schema.
 
-Trade-off Score = Pin Reduction − λ × Accuracy Drop
+Sample: `sample_data/sample_tradeoff.csv`
 
-- Pin Reduction represents hardware efficiency gain
-- Accuracy Drop represents performance degradation
-- λ (lambda) controls the relative importance of accuracy vs hardware efficiency
+### 3) RTL latency comparison CSV
 
-By adjusting λ, users can simulate different deployment priorities and observe how the optimal configuration changes.
+Expected columns:
+- `run_id`
+- `latency_lut`
+- `latency_mac`
 
-This transforms experiment logs into a decision-support system rather than simple visualization.
+The parser converts this into two candidates:
+- `config_id=rtl_lut`, `design_type=LUT`
+- `config_id=rtl_mac`, `design_type=MAC`
 
-## Note
-An earlier version of this project (`legacy_log_dashboard.py`) was initially developed for simple log visualization.  
-The current version extends this into a hardware-aware analysis tool with structured trade-off evaluation.
+Each candidate contains average `latency_cycles`, a `run_count`, and `source=rtl_simulation`.
+Other metrics remain `NaN` (and the tool still supports latency-oriented comparisons).
 
-## Key Features
+Sample: `sample_data/sample_rtl_results.csv`
 
-- Trade-off Visualization  
-  Visualizes relationships between accuracy, pin reduction, and slice reduction
+## Decision flow (what the UI does)
 
-- Pareto Frontier Analysis  
-  Identifies optimal configurations under multi-objective constraints
+1. **Load & normalize** candidates into a canonical dataframe (`parsers.load_and_normalize_data`)
+2. **Apply hard constraints** to produce:
+   - feasible candidates
+   - rejected candidates + rejection reasons
+3. **Compute Pareto frontier** over selected objectives (`analysis_engine.compute_pareto_frontier`)
+4. **Generate recommendations** from the feasible set (`recommendation.py`)
+5. **Sensitivity analysis**: adjust weights and sweep a parameter to observe recommendation changes
 
-- Recommendation System  
-  Automatically suggests configurations based on:
-  - Best trade-off score
-  - Best accuracy retention
-  - Highest hardware efficiency
+## Pareto frontier (definition)
 
-- Lambda Sensitivity Analysis  
-  Shows how optimal configurations shift as trade-off preference (λ) changes
+A feasible candidate is **Pareto-optimal** if **no other feasible candidate** is:
+- at least as good in all selected objectives, and
+- strictly better in at least one objective,
+given the selected maximize/minimize directions.
 
-- Experiment Dashboard  
-  Interactive exploration of experiment logs (accuracy curves, metrics, comparisons)
+## Recommendation logic (high level)
 
-## Example Metrics
+All recommendation modes operate on the **feasible set only**:
+- **Best accuracy**: highest `accuracy`
+- **Best efficiency**: strongest hardware efficiency proxy using available reduction/efficiency metrics
+- **Best latency-aware**: lowest `latency_cycles` (tie-break using accuracy/resources when available)
+- **Best balanced**: min-max normalized weighted score using available metrics only
 
-•	maximum test accuracy
-•	accuracy drop from baseline
-•	pin reduction rate
-•	slice reduction
-•	packing efficiency
-•	trade-off score
-	
-## Files
+## RTL integration
 
-- `analysis_engine.py`: core analysis logic
-- `app.py`: Streamlit interface
-- `sample_experiments.json`: sample experiment log file for testing the dashboard
+RTL-derived CSV outputs are treated as first-class candidates via `parsers.parse_rtl_latency_csv`.
+This supports a workflow where detailed simulation results inform system-level design selection,
+even when not all metrics are available in the RTL output yet.
 
-## How to Run
+## How to run
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
+```
+
+## Project structure
+
+```text
+project_root/
+├── app.py                     # Streamlit UI only
+├── analysis_engine.py         # constraints, Pareto, scoring, sensitivity helpers
+├── parsers.py                 # JSON/CSV loaders + schema normalization (incl. RTL CSV)
+├── recommendation.py          # recommendation modes (feasible-set only)
+├── sample_data/
+│   ├── sample_experiments.json
+│   ├── sample_tradeoff.csv
+│   └── sample_rtl_results.csv
+├── results/                   # optional outputs
+├── README.md
+└── requirements.txt
+```
+
